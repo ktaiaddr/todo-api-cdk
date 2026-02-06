@@ -223,7 +223,7 @@ func deleteTodo(ctx context.Context, id string, headers map[string]string) (even
 }
 
 // respond は JSON レスポンスを構築するヘルパー
-func respond(statusCode int, body any, headers map[string]string) (events.APIGatewayProxyResponse, error) {
+func respond(statusCode int, body interface{}, headers map[string]string) (events.APIGatewayProxyResponse, error) {
 	jsonBody, err := json.Marshal(body)
 	if err != nil {
 		return events.APIGatewayProxyResponse{

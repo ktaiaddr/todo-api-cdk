@@ -1,6 +1,6 @@
 module github.com/koujibook/aws-first/lambda
 
-go 1.25.7
+go 1.25
 
 require (
 	github.com/aws/aws-lambda-go v1.52.0
