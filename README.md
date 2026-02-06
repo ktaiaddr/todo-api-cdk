@@ -10,7 +10,7 @@ AWS CDK (TypeScript) + Go Lambda + DynamoDB で構築した TODO 管理 API で�
 
 | リソース | 詳細 |
 |----------|------|
-| API Gateway | REST API、CORS 有効 |
+| API Gateway | REST API、CORS 有効、API キー認証 + 使用量プラン |
 | Lambda | Go (provided.al2)、128MB、30秒タイムアウト |
 | DynamoDB | `Todos` テーブル、オンデマンド課金 |
 
@@ -59,39 +59,59 @@ npx cdk deploy
 
 デプロイ完了後、`ApiUrl` として API Gateway の URL が出力されます。
 
-デプロイ後に API URL を再確認するには：
+デプロイ後に API URL と API キーを確認するには：
 
 ```bash
-# CloudFormation の出力から確認
+# API URL を確認
 aws cloudformation describe-stacks --stack-name FirstStack \
   --query "Stacks[0].Outputs[?OutputKey=='ApiUrl'].OutputValue" --output text
+
+# API キーの値を確認（ApiKeyId はデプロイ時の出力に表示される）
+aws apigateway get-api-key --api-key <ApiKeyId> --include-value
 ```
 
 ## 使い方
 
+全リクエストに `x-api-key` ヘッダーが必要です。
+
 ```bash
-# API URL を変数にセット（上記コマンドの出力値を使用）
-API_URL="https://xxxxx.execute-api.ap-northeast-1.amazonaws.com/prod"
+# 変数にセット
+API_URL=$(aws cloudformation describe-stacks --stack-name FirstStack \
+  --query "Stacks[0].Outputs[?OutputKey=='ApiUrl'].OutputValue" --output text)
+API_KEY=$(aws apigateway get-api-key --include-value \
+  --api-key $(aws cloudformation describe-stacks --stack-name FirstStack \
+    --query "Stacks[0].Outputs[?OutputKey=='ApiKeyId'].OutputValue" --output text) \
+  | jq -r '.value')
 
 # 作成
-curl -X POST "${API_URL}/todos" \
+curl -X POST "${API_URL}todos" \
   -H "Content-Type: application/json" \
+  -H "x-api-key: ${API_KEY}" \
   -d '{"title": "タスク名", "content": "タスクの詳細"}'
 
 # 一覧取得
-curl "${API_URL}/todos"
+curl -H "x-api-key: ${API_KEY}" "${API_URL}todos"
 
 # 単体取得
-curl "${API_URL}/todos/{id}"
+curl -H "x-api-key: ${API_KEY}" "${API_URL}todos/{id}"
 
 # 更新
-curl -X PUT "${API_URL}/todos/{id}" \
+curl -X PUT "${API_URL}todos/{id}" \
   -H "Content-Type: application/json" \
+  -H "x-api-key: ${API_KEY}" \
   -d '{"completed": true}'
 
 # 削除
-curl -X DELETE "${API_URL}/todos/{id}"
+curl -X DELETE -H "x-api-key: ${API_KEY}" "${API_URL}todos/{id}"
 ```
+
+## レート制限
+
+| 項目 | 値 |
+|------|-----|
+| リクエスト上限 | 1,000 回/日 |
+| レートリミット | 10 リクエスト/秒 |
+| バースト上限 | 20 リクエスト |
 
 ## その他のコマンド
 

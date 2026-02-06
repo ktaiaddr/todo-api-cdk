@@ -40,22 +40,47 @@ export class FirstStack extends cdk.Stack {
     });
 
     const lambdaIntegration = new apigateway.LambdaIntegration(todoFunction);
+    const methodOptions = { apiKeyRequired: true };
 
     // /todos リソース
     const todos = api.root.addResource('todos');
-    todos.addMethod('GET', lambdaIntegration);
-    todos.addMethod('POST', lambdaIntegration);
+    todos.addMethod('GET', lambdaIntegration, methodOptions);
+    todos.addMethod('POST', lambdaIntegration, methodOptions);
 
     // /todos/{id} リソース
     const todoById = todos.addResource('{id}');
-    todoById.addMethod('GET', lambdaIntegration);
-    todoById.addMethod('PUT', lambdaIntegration);
-    todoById.addMethod('DELETE', lambdaIntegration);
+    todoById.addMethod('GET', lambdaIntegration, methodOptions);
+    todoById.addMethod('PUT', lambdaIntegration, methodOptions);
+    todoById.addMethod('DELETE', lambdaIntegration, methodOptions);
+
+    // API キー
+    const apiKey = api.addApiKey('TodoApiKey');
+
+    // 使用量プラン
+    const usagePlan = api.addUsagePlan('TodoUsagePlan', {
+      name: 'TodoUsagePlan',
+      throttle: {
+        rateLimit: 10,    // 1秒あたり10リクエスト
+        burstLimit: 20,   // バースト上限20
+      },
+      quota: {
+        limit: 1000,      // 1日あたり1000リクエスト
+        period: apigateway.Period.DAY,
+      },
+    });
+    usagePlan.addApiKey(apiKey);
+    usagePlan.addApiStage({ stage: api.deploymentStage });
 
     // API URL を出力
     new cdk.CfnOutput(this, 'ApiUrl', {
       value: api.url,
       description: 'TODO API Gateway URL',
+    });
+
+    // API キーの確認コマンドを出力
+    new cdk.CfnOutput(this, 'ApiKeyId', {
+      value: apiKey.keyId,
+      description: 'API Key ID（値の確認: aws apigateway get-api-key --api-key <ID> --include-value）',
     });
   }
 }
