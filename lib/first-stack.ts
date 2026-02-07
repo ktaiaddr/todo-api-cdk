@@ -1,6 +1,7 @@
 import * as cdk from 'aws-cdk-lib/core';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
+import * as cognito from 'aws-cdk-lib/aws-cognito';
 import { GoFunction } from '@aws-cdk/aws-lambda-go-alpha';
 import { Construct } from 'constructs';
 
@@ -8,10 +9,38 @@ export class FirstStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
 
-    // DynamoDB テーブル
+    // Cognito ユーザープール
+    const userPool = new cognito.UserPool(this, 'TodoUserPool', {
+      userPoolName: 'todo-user-pool',
+      selfSignUpEnabled: true,
+      signInAliases: { email: true },
+      autoVerify: { email: true },
+      passwordPolicy: {
+        minLength: 8,
+        requireUppercase: true,
+        requireDigits: true,
+        requireSymbols: false,
+        requireLowercase: true,
+      },
+      accountRecovery: cognito.AccountRecovery.EMAIL_ONLY,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
+
+    // アプリクライアント（CLI 検証用に USER_PASSWORD_AUTH を有効化）
+    const userPoolClient = userPool.addClient('TodoAppClient', {
+      userPoolClientName: 'todo-app-client',
+      authFlows: {
+        userPassword: true,
+        userSrp: true,
+      },
+      generateSecret: false,
+    });
+
+    // DynamoDB テーブル（userId をパーティションキー、id をソートキーに変更）
     const todosTable = new dynamodb.Table(this, 'TodosTable', {
       tableName: 'Todos',
-      partitionKey: { name: 'id', type: dynamodb.AttributeType.STRING },
+      partitionKey: { name: 'userId', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'id', type: dynamodb.AttributeType.STRING },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
@@ -39,8 +68,18 @@ export class FirstStack extends cdk.Stack {
       },
     });
 
+    // Cognito オーソライザー
+    const authorizer = new apigateway.CognitoUserPoolsAuthorizer(this, 'TodoAuthorizer', {
+      cognitoUserPools: [userPool],
+      authorizerName: 'todo-cognito-authorizer',
+    });
+
     const lambdaIntegration = new apigateway.LambdaIntegration(todoFunction);
-    const methodOptions = { apiKeyRequired: true };
+    const methodOptions: apigateway.MethodOptions = {
+      apiKeyRequired: true,
+      authorizer,
+      authorizationType: apigateway.AuthorizationType.COGNITO,
+    };
 
     // /todos リソース
     const todos = api.root.addResource('todos');
@@ -81,6 +120,16 @@ export class FirstStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'ApiKeyId', {
       value: apiKey.keyId,
       description: 'API Key ID（値の確認: aws apigateway get-api-key --api-key <ID> --include-value）',
+    });
+
+    // Cognito 情報を出力
+    new cdk.CfnOutput(this, 'UserPoolId', {
+      value: userPool.userPoolId,
+      description: 'Cognito User Pool ID',
+    });
+    new cdk.CfnOutput(this, 'UserPoolClientId', {
+      value: userPoolClient.userPoolClientId,
+      description: 'Cognito User Pool Client ID',
     });
   }
 }
