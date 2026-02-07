@@ -124,4 +124,5 @@ npx cdk diff
 
 # 全リソース削除
 npx cdk destroy
+aws logs delete-log-group --log-group-name /aws/lambda/todo-api-handler   
 ```
