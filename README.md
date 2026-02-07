@@ -162,3 +162,5 @@ npx cdk diff
 npx cdk destroy
 aws logs delete-log-group --log-group-name /aws/lambda/todo-api-handler
 ```
+
+claude --resume c1447cc7-4cad-4fc8-97f5-82d7744bd53a
